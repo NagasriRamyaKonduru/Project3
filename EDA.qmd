@@ -4,4 +4,197 @@ format: html
 editor: visual
 ---
 
-This is where we will be doing EDA
+```{r}
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+```
+
+This project uses the **BRFSS 2015 Diabetes Health Indicators** dataset.  
+Each row represents an individual surveyed, and the goal is to understand how health and lifestyle variables relate to the likelihood of diabetes.
+
+
+```{r}
+
+data <- read_csv("data/diabetes_012_health_indicators_BRFSS2015.csv")
+```
+
+The database contains data 0,1 and 2 which means : 
+0 = no diabetes 1 = pre-diabetes 2 = diabetes
+
+We construct a **binary outcome variable**:
+
+- **0 → No diabetes**
+- **1 → Pre-diabetes or Diabetes**
+
+
+So making this data binary for our project
+```{r}
+data <- data %>%
+  mutate(
+    Diabetes_binary = ifelse(Diabetes_012 == 0, 0, 1),
+    Diabetes_binary = factor(Diabetes_binary, labels = c("No", "Yes"))
+  )
+```
+
+Checking the transformation : 
+
+```{r}
+table(data$Diabetes_012, data$Diabetes_binary)
+```
+
+```{r}
+data <- data %>%
+  mutate(
+    HighBP = factor(HighBP, labels = c("No", "Yes")),
+    HighChol = factor(HighChol, labels = c("No", "Yes")),
+    CholCheck = factor(CholCheck, labels = c("No", "Yes")),
+    Smoker = factor(Smoker, labels = c("No", "Yes")),
+    Stroke = factor(Stroke, labels = c("No", "Yes")),
+    HeartDiseaseorAttack = factor(HeartDiseaseorAttack, labels = c("No", "Yes")),
+    PhysActivity = factor(PhysActivity, labels = c("No", "Yes")),
+    Fruits = factor(Fruits, labels = c("No", "Yes")),
+    Veggies = factor(Veggies, labels = c("No", "Yes")),
+    HvyAlcoholConsump = factor(HvyAlcoholConsump, labels = c("No", "Yes")),
+    AnyHealthcare = factor(AnyHealthcare, labels = c("No", "Yes")),
+    NoDocbcCost = factor(NoDocbcCost, labels = c("No", "Yes")),
+    DiffWalk = factor(DiffWalk, labels = c("No", "Yes")),
+    Sex = factor(Sex, labels = c("Female", "Male")),
+    GenHlth = factor(GenHlth),
+    Education = factor(Education),
+    Income = factor(Income),
+    Age = as.numeric(Age),   # leave numeric
+    BMI = as.numeric(BMI)    # leave numeric
+  )
+```
+
+# Data Overview
+
+**Number of rows and columns**
+
+```{r}
+dim(data)
+```
+
+**Column Names**
+
+```{r}
+colnames(data)
+```
+
+**Glimpse of data structure**
+
+```{r}
+glimpse(data)
+```
+
+**Missingness Check**
+
+```{r}
+sum(is.na(data))
+```
+
+**Narrative:**
+This dataset has either no missing values or minimal missingness due to BRFSS preprocessing.
+Therefore, no imputation is required at this stage.
+
+# Outcome Variable Distribution
+
+```{r}
+data %>%
+count(Diabetes_binary) %>%
+mutate(prop = n / sum(n))
+ggplot(data, aes(x = Diabetes_binary, fill = Diabetes_binary)) +
+geom_bar() +
+scale_fill_manual(values = c("#4DB6AC", "#EF5350")) +
+labs(
+title = "Distribution of Diabetes (Binary)",
+x = "Diabetes Status",
+y = "Count"
+) +
+theme_minimal()
+```
+**Narrative:**
+Most individuals do not have diabetes, but the "Yes" class is large enough for stable modeling.
+
+# BMI Distribution 
+
+```{r}
+ggplot(data, aes(x = BMI)) +
+geom_histogram(bins = 40, fill = "#42A5F5") +
+labs(
+title = "BMI Distribution",
+x = "BMI",
+y = "Count"
+) +
+theme_minimal()
+```
+
+# Diabetes vs High Blood Pressure
+```{r}
+data %>%
+count(HighBP, Diabetes_binary) %>%
+ggplot(aes(x = HighBP, y = n, fill = Diabetes_binary)) +
+geom_col(position = "dodge") +
+labs(
+title = "Diabetes vs High Blood Pressure",
+x = "High Blood Pressure",
+y = "Count",
+fill = "Diabetes"
+) +
+theme_minimal()
+```
+
+# Diabetes vs Smoking
+```{r}
+data %>%
+count(Smoker, Diabetes_binary) %>%
+ggplot(aes(x = Smoker, y = n, fill = Diabetes_binary)) +
+geom_col(position = "dodge") +
+labs(
+title = "Diabetes vs Smoking",
+x = "Smoker",
+y = "Count"
+) +
+theme_minimal()
+```
+
+# Correlation Among Numeric Variables
+
+```{r}
+numeric_vars <- data %>%
+select(BMI, MentHlth, PhysHlth, Age)
+
+cor(numeric_vars)
+```
+
+# Summary Table for Key Predictors
+
+```{r}
+data %>%
+tabyl(Diabetes_binary)
+data %>%
+summarise(
+mean_BMI = mean(BMI),
+median_BMI = median(BMI),
+mean_Age = mean(Age)
+)
+```
+
+# Conclusion
+
+This EDA highlights several strong relationships between diabetes and predictors such as:
+
+High blood pressure
+
+High cholesterol
+
+Smoking
+
+BMI
+
+Limited physical activity
+
+Self-reported general health
+
+These patterns will guide model selection and predictor choice for the classification tree and random forest models.

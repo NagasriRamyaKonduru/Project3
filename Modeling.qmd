@@ -5,4 +5,9 @@ editor: visual
 ---
 
 
-This is where we will be doing the models and comparing them
+```{r}
+library(tidyverse)
+
+data <- read_csv("data/diabetes_012_health_indicators_BRFSS2015.csv")
+```
+
