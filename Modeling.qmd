@@ -1,13 +1,132 @@
 ---
-title: "Modeling"
+title: "Modeling: Diabetes Prediction"
 format: html
-editor: visual
+toc: true
+toc-depth: 3
 ---
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+library(yardstick)
+
+tidymodels_prefer()
+```
 
 
 ```{r}
-library(tidyverse)
 
 data <- read_csv("data/diabetes_012_health_indicators_BRFSS2015.csv")
 ```
 
+
+# Introduction
+
+This document builds predictive models for the **Diabetes_binary** outcome created in the EDA.  
+Our goal is to compare two supervised learning methods:
+
+1. **Classification Tree**  
+2. **Random Forest**
+
+We evaluate models using **log-loss** through 5-fold cross-validation.  
+The final step is selecting the best model based on test-set performance.
+
+Loading Data and recreating the binary variable 
+```{r}
+# Load the dataset
+data <- read_csv("data/diabetes_012_health_indicators_BRFSS2015.csv")
+
+# Create binary diabetes variable
+data <- data %>%
+  mutate(
+    Diabetes_binary = ifelse(Diabetes_012 == 0, 0, 1),
+    Diabetes_binary = factor(Diabetes_binary, labels = c("No", "Yes"))
+  )
+```
+
+
+Convert Predictors to Factors
+```{r}
+data <- data %>%
+  mutate(
+    HighBP = factor(HighBP, labels = c("No", "Yes")),
+    HighChol = factor(HighChol, labels = c("No", "Yes")),
+    CholCheck = factor(CholCheck, labels = c("No", "Yes")),
+    Smoker = factor(Smoker, labels = c("No", "Yes")),
+    Stroke = factor(Stroke, labels = c("No", "Yes")),
+    HeartDiseaseorAttack = factor(HeartDiseaseorAttack, labels = c("No", "Yes")),
+    PhysActivity = factor(PhysActivity, labels = c("No", "Yes")),
+    Fruits = factor(Fruits, labels = c("No", "Yes")),
+    Veggies = factor(Veggies, labels = c("No", "Yes")),
+    HvyAlcoholConsump = factor(HvyAlcoholConsump, labels = c("No", "Yes")),
+    AnyHealthcare = factor(AnyHealthcare, labels = c("No", "Yes")),
+    NoDocbcCost = factor(NoDocbcCost, labels = c("No", "Yes")),
+    DiffWalk = factor(DiffWalk, labels = c("No", "Yes")),
+    Sex = factor(Sex, labels = c("Female", "Male")),
+    GenHlth = factor(GenHlth),
+    Education = factor(Education),
+    Income = factor(Income)
+  )
+```
+
+Splitting data 
+
+```{r}
+set.seed(123)
+
+data_split <- initial_split(data, prop = 0.7, strata = Diabetes_binary)
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+```
+
+Now, Creating recipe
+
+```{r}
+diabetes_recipe <- recipe(Diabetes_binary ~ HighBP + HighChol + BMI + Age + Smoker +
+                            HeartDiseaseorAttack + PhysActivity + GenHlth + DiffWalk,
+                          data = train_data) %>%
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors())
+```
+
+# Classification Tree 
+
+```{r}
+set.seed(123)
+folds <- vfold_cv(train_data, v = 5, strata = Diabetes_binary)
+```
+
+```{r}
+tree_spec <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune()
+) %>%
+  set_engine("rpart") %>%
+  set_mode("classification")
+```
+
+```{r}
+
+tree_workflow <- workflow() %>%
+  add_model(tree_spec) %>%
+  add_recipe(diabetes_recipe)
+```
+
+```{r}
+tree_grid <- grid_regular(
+  cost_complexity(range = c(-5, -1)),
+  tree_depth(range = c(3, 10)),
+  levels = 5
+)
+```
+
+
+```{r}
+set.seed(123)
+tree_tuned <- tune_grid(
+  tree_workflow,
+  resamples = folds,
+  grid = tree_grid,
+  metrics = metric_set(log_loss)
+)
+```
