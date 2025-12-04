@@ -120,6 +120,10 @@ tree_grid <- grid_regular(
 )
 ```
 
+```{r}
+mn_log_loss
+```
+
 
 ```{r}
 set.seed(123)
@@ -127,6 +131,152 @@ tree_tuned <- tune_grid(
   tree_workflow,
   resamples = folds,
   grid = tree_grid,
-  metrics = metric_set(log_loss)
+  metrics = metric_set(mn_log_loss)
 )
+
+
 ```
+
+## Checking the tuning results 
+
+This will list the top 5 parameter combinations (lowest log-loss).
+```{r}
+show_best(tree_tuned, metric = "mn_log_loss", n = 5)
+```
+
+
+```{r}
+best_tree <- select_best(tree_tuned, metric = "mn_log_loss")
+best_tree
+```
+This gives you:
+
+the best cost_complexity
+
+the best tree_depth
+
+Finalising the workflow 
+
+```{r}
+final_tree_workflow <- finalize_workflow(tree_workflow, best_tree)
+final_tree_fit <- fit(final_tree_workflow, data = train_data)
+```
+
+```{r}
+tree_preds <- predict(final_tree_fit, test_data, type = "prob") %>%
+  bind_cols(test_data %>% select(Diabetes_binary))
+
+mn_log_loss(tree_preds, truth = Diabetes_binary, .pred_No)
+
+mn_log_loss(tree_preds, truth = Diabetes_binary, .pred_Yes)
+```
+
+
+# Random Forest 
+
+```{r}
+rf_spec <- rand_forest(
+  mtry = tune(),
+  trees = 500,
+  min_n = 5
+) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+```
+
+Creating the workflow 
+
+```{r}
+rf_workflow <- workflow() %>%
+  add_model(rf_spec) %>%
+  add_recipe(diabetes_recipe)
+```
+
+Tuning 
+
+```{r}
+rf_grid <- tibble(mtry = c(3, 5, 7, 10, 15))
+```
+
+```{r}
+set.seed(123)
+
+train_small <- train_data %>% sample_frac(0.20)
+
+folds_small <- vfold_cv(train_small, v = 5, strata = Diabetes_binary)
+
+rf_grid <- tibble(mtry = c(5, 10))
+
+rf_spec <- rand_forest(
+  mtry = tune(),
+  trees = 200,
+  min_n = 5
+) %>% 
+  set_engine("ranger") %>% 
+  set_mode("classification")
+
+rf_workflow <- workflow() %>%
+  add_model(rf_spec) %>%
+  add_recipe(diabetes_recipe)
+
+rf_tuned <- tune_grid(
+  rf_workflow,
+  resamples = folds_small,
+  grid = rf_grid,
+  metrics = metric_set(mn_log_loss)
+)
+
+```
+
+
+## Checking the tuning results 
+Top Random Forest Models 
+
+```{r}
+show_best(rf_tuned, metric = "mn_log_loss", n = 5)
+```
+
+
+Selecting the best random forest model 
+
+```{r}
+best_rf <- select_best(rf_tuned, metric = "mn_log_loss")
+best_rf
+```
+
+Finalising the RF Model 
+
+```{r}
+final_rf_workflow <- finalize_workflow(rf_workflow, best_rf)
+```
+
+```{r}
+final_rf_fit <- fit(final_rf_workflow, data = train_data)
+```
+
+```{r}
+rf_preds <- predict(final_rf_fit, test_data, type = "prob") %>%
+  bind_cols(test_data %>% select(Diabetes_binary))
+
+colnames(rf_preds)
+mn_log_loss(rf_preds, truth = Diabetes_binary, .pred_No)
+mn_log_loss(rf_preds, truth = Diabetes_binary, .pred_Yes)
+
+
+```
+# Final Model Selection
+
+After tuning and evaluating both models, we compare their performance on the test set using the
+`mn_log_loss` metric.
+
+- **Classification Tree log-loss:** 0.3590  
+- **Random Forest log-loss:** 0.3482  
+
+Because a lower log-loss indicates a better predictive model, the **Random Forest model is selected as
+our final model**. This model will be refit on the entire dataset in the API script and will serve as the
+model deployed through the plumber API and Docker container.
+
+The Random Forest provides improved predictive accuracy due to its ability to aggregate many weak
+learners and reduce variance compared to a single classification tree. Given the size and complexity of the
+dataset, this behavior aligns with expectations.
+
