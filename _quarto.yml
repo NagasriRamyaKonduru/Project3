@@ -1,0 +1,17 @@
+project:
+  type: website
+
+website:
+  title: "Project 3 – Diabetes Prediction"
+  navbar:
+    left:
+      - text: "EDA"
+        href: EDA.html
+      - text: "Modeling"
+        href: Modeling.html
+      - text: "API File"
+        href: api.R
+
+format:
+  html:
+    theme: cosmo
